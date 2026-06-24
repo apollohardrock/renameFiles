@@ -23,7 +23,7 @@ class RenomeadorPDFApp:
 
         # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
         self.versao_atual = "1.1"
-        self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiless/main/versao.txt"
+        self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiles/main/versao.txt"
         self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/RenomeadorPDF.exe"
 
 

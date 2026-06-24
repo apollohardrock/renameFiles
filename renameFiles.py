@@ -22,7 +22,7 @@ class RenomeadorPDFApp:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
         # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
-        self.versao_atual = "1.3"
+        self.versao_atual = "1.4"
         self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiles/main/versao.txt"
         self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/renameFiles.exe"
 
@@ -256,7 +256,8 @@ class RenomeadorPDFApp:
                 
                 # Filtro Automático 3: Limpeza de MEI e Códigos Bancários
                 elif any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário"]):
-                    valor = re.sub(r'(?<!\S)[0-9.-]{6,}(?!\S)', '', valor)
+                    # AQUI ESTÁ A MÁGICA NOVA: Regex atualizada para pegar números com espaços
+                    valor = re.sub(r'(?<!\S)(?:\d[\s.-]*){6,}(?!\S)', '', valor)
                     valor = re.sub(r'\s+', ' ', valor).strip()
                         
                 return valor

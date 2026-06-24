@@ -1,0 +1,11 @@
+# Pastas do PyInstaller
+build/
+dist/
+*.spec
+
+# Arquivos gerados pelo usuário
+templates_renomeador.json
+
+# Arquivos de cache do Python
+__pycache__/
+*.pyc

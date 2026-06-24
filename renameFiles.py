@@ -22,7 +22,7 @@ class RenomeadorPDFApp:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
         # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
-        self.versao_atual = "1.2"
+        self.versao_atual = "1.3"
         self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiles/main/versao.txt"
         self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/renameFiles.exe"
 
@@ -225,8 +225,17 @@ class RenomeadorPDFApp:
 
     def extrair_valor_dinamico(self, texto, campo, aparicao):
         try:
-            # 1. Higienização de Tabela (O Truque para o Sicoob)
+            # 1. Higienização de Tabela Sicoob (Quebras de linha vazias)
             texto_limpo = re.sub(r'\n[ \t]+', ' ', texto)
+            
+            # NOVO: Correção de Desalinhamento (A Ilusão de Ótica do Sicoob)
+            # Puxa o texto que subiu para a linha do Destinatário de volta para a linha do Nome
+            texto_limpo = re.sub(
+                r'Destinatário:\s*([^\n]+)\n[\s]*Nome:([^\n]*)', 
+                r'Destinatário:\nNome: \1 \2', 
+                texto_limpo, 
+                flags=re.IGNORECASE
+            )
             
             # 2. Motor de Busca Flexível
             padrao = re.compile(rf"{re.escape(campo)}[\s\n:]*([^\n\r]+)", re.IGNORECASE)
@@ -246,14 +255,8 @@ class RenomeadorPDFApp:
                         valor = match_valor.group(1)
                 
                 # Filtro Automático 3: Limpeza de MEI e Códigos Bancários
-                # Dispara se o usuário estiver buscando algo relacionado a Nome ou Razão Social
                 elif any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário"]):
-                    
-                    # Remove blocos isolados que contenham apenas números, pontos ou hifens (com 6 ou mais caracteres)
-                    # Ex: Remove "12345678909" (MEI) e "15.133.578" (Sicoob)
                     valor = re.sub(r'(?<!\S)[0-9.-]{6,}(?!\S)', '', valor)
-                    
-                    # Remove espaços duplos que possam ter sobrado após a remoção do número
                     valor = re.sub(r'\s+', ' ', valor).strip()
                         
                 return valor

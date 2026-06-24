@@ -22,7 +22,7 @@ class RenomeadorPDFApp:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
         # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
-        self.versao_atual = "1.1"
+        self.versao_atual = "1.2"
         self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiles/main/versao.txt"
         self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/RenomeadorPDF.exe"
 
@@ -223,23 +223,45 @@ class RenomeadorPDFApp:
         nome_seguro = str(nome).replace("/", "-").replace("\\", "-")
         return re.sub(r'[*?:"<>|]', "", nome_seguro).strip()
 
-    def extrair_valor_dinamico(self, texto, rotulo_usuario, ocorrencia_desejada):
-        padrao = rf"{re.escape(rotulo_usuario)}[^\w]*([^\n]+)"
-        matches = list(re.finditer(padrao, texto, re.IGNORECASE))
+    def extrair_valor_dinamico(self, texto, campo, aparicao):
+        try:
+            # 1. Higienização de Tabela (O Truque para o Sicoob)
+            texto_limpo = re.sub(r'\n[ \t]+', ' ', texto)
+            
+            # 2. Motor de Busca Flexível
+            padrao = re.compile(rf"{re.escape(campo)}[\s\n:]*([^\n\r]+)", re.IGNORECASE)
+            
+            resultados = list(padrao.finditer(texto_limpo))
+            
+            if resultados and len(resultados) >= aparicao:
+                valor = resultados[aparicao - 1].group(1).strip()
+                
+                # Filtro Automático 1: Remove horas grudadas na Data
+                valor = re.sub(r'(\d{2}/\d{2}/\d{4})[\s-]+(?:\d{2}:\d{2}(?::\d{2})?)', r'\1', valor)
+                
+                # Filtro Automático 2: Limpa sujeiras ao redor de Valores Monetários
+                if "valor" in campo.lower():
+                    match_valor = re.search(r'(R\$[\s]*[0-9.,]+)', valor)
+                    if match_valor:
+                        valor = match_valor.group(1)
+                
+                # Filtro Automático 3: Limpeza de MEI e Códigos Bancários
+                # Dispara se o usuário estiver buscando algo relacionado a Nome ou Razão Social
+                elif any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário"]):
+                    
+                    # Remove blocos isolados que contenham apenas números, pontos ou hifens (com 6 ou mais caracteres)
+                    # Ex: Remove "12345678909" (MEI) e "15.133.578" (Sicoob)
+                    valor = re.sub(r'(?<!\S)[0-9.-]{6,}(?!\S)', '', valor)
+                    
+                    # Remove espaços duplos que possam ter sobrado após a remoção do número
+                    valor = re.sub(r'\s+', ' ', valor).strip()
+                        
+                return valor
+            else:
+                return f"[{campo} n/e]"
+        except Exception:
+            return f"[Erro na busca de {campo}]"
         
-        if matches and len(matches) >= ocorrencia_desejada:
-            valor_bruto = matches[ocorrencia_desejada - 1].group(1).strip()
-            
-            # --- NOVIDADE: Filtro Inteligente de Data e Hora ---
-            # Encontra e apaga formatos como "14:30:00" ou "14:30"
-            valor_sem_hora = re.sub(r'\b\d{2}:\d{2}(?::\d{2})?\b', '', valor_bruto)
-            
-            # Limpa espaços e hifens soltos que possam ter ficado ao redor da data
-            valor_limpo = valor_sem_hora.strip(' -|/\\:_')
-            
-            return self.limpar_nome_arquivo(valor_limpo)
-            
-        return None
     def processar_arquivos(self):
         if not self.pasta_selecionada:
             messagebox.showwarning("Aviso", "Por favor, selecione a pasta com os PDFs primeiro!")

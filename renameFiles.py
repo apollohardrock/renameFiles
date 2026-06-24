@@ -22,9 +22,9 @@ class RenomeadorPDFApp:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
         # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
-        self.versao_atual = "1.0"
-        self.url_versao = "https://raw.githubusercontent.com/apollohardrock/app-renomeador-pdf/main/versao.txt"
-        self.url_exe = "https://github.com/apollohardrock/app-renomeador-pdf/releases/latest/download/RenomeadorPDF.exe"
+        self.versao_atual = "1.1"
+        self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiless/main/versao.txt"
+        self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/RenomeadorPDF.exe"
 
 
         self.pasta_selecionada = ""

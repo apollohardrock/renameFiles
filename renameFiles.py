@@ -220,16 +220,29 @@ class RenomeadorPDFApp:
         self.root.update_idletasks()
         
     def limpar_nome_arquivo(self, nome):
-        nome_seguro = str(nome).replace("/", "-").replace("\\", "-")
-        return re.sub(r'[*?:"<>|]', "", nome_seguro).strip()
-
+        import re
+        nome_limpo = str(nome)
+        # 1. Substitui barras (normais e invertidas) por hifens ANTES de tudo
+        nome_limpo = re.sub(r'[/\\]', '-', nome_limpo)
+        
+        # 2. Remove os caracteres proibidos pelo Windows
+        nome_limpo = re.sub(r'[<>:"|?*]', '', nome_limpo)
+        
+        # 3. Remove quebras de linha
+        nome_limpo = re.sub(r'[\n\r]+', ' ', nome_limpo)
+        
+        # 4. Remove espaços extras
+        nome_limpo = re.sub(r'\s+', ' ', nome_limpo).strip()
+        
+        return nome_limpo
+    
     def extrair_valor_dinamico(self, texto, campo, aparicao):
         import re
         try:
-            # 1. Higienização de Tabela Sicoob (Quebras de linha vazias)
+            # 1. Higienização de Tabela Sicoob
             texto_limpo = re.sub(r'\n[ \t]+', ' ', texto)
             
-            # Correção de Desalinhamento (A Ilusão de Ótica do Sicoob)
+            # Correção de Desalinhamento (Sicoob)
             texto_limpo = re.sub(
                 r'Destinatário:\s*([^\n]+)\n[\s]*Nome:([^\n]*)',
                 r'Destinatário:\nNome: \1 \2',
@@ -237,8 +250,7 @@ class RenomeadorPDFApp:
                 flags=re.IGNORECASE
             )
             
-            # 2. Motor de Busca Inteligente (Mesma linha vs Linha de baixo)
-            # O Regex agora captura o que restou na mesma linha (Grupo 1) e a linha de baixo (Grupo 2)
+            # 2. Motor de Busca Inteligente
             padrao = re.compile(rf"{re.escape(campo)}[ \t:]*([^\n\r]*)(?:\n\s*([^\n\r]+))?", re.IGNORECASE)
             
             resultados = list(padrao.finditer(texto_limpo))
@@ -247,30 +259,54 @@ class RenomeadorPDFApp:
                 texto_mesma_linha = match.group(1).strip() if match.group(1) else ""
                 texto_linha_baixo = match.group(2).strip() if match.group(2) else ""
                 
-                # Inteligência de Decisão: se a mesma linha tiver texto útil, usa ela. Senão, pula para a de baixo.
-                if len(texto_mesma_linha) > 1:
+                # --- INTELIGÊNCIA DE DECISÃO (Detector de Cabeçalhos) ---
+                texto_mesma_linha_limpo = texto_mesma_linha.lower()
+                is_cabecalho_tabela = any(termo in texto_mesma_linha_limpo for termo in [
+                    "cpf/cnpj", "cpf", "cnpj", "agência", "agencia", "código", "codigo", "vencimento", "data", "espécie"
+                ])
+                
+                if is_cabecalho_tabela and texto_linha_baixo:
+                    valor = texto_linha_baixo
+                elif len(texto_mesma_linha) > 1 and not is_cabecalho_tabela:
                     valor = texto_mesma_linha
                 elif texto_linha_baixo:
                     valor = texto_linha_baixo
                 else:
                     valor = ""
-                    
-                # Filtro Automático 1: Remove horas grudadas na Data
-                valor = re.sub(r'(\d{2}/\d{2}/\d{4})[\s-]+(?:\d{2}:\d{2}(?::\d{2})?)', r'\1', valor)
-                
-                # Filtro Automático 2: Limpa sujeiras ao redor de Valores Monetários
+
+                # Blindagem Safra (Cabeçalhos Colados Antigos)
+                if "Código Favorecido" in valor or "CPF/CNPJ" in valor:
+                    if "-" in valor:
+                        valor = valor.split("-", 1)[-1].strip()
+                    valor = re.split(r'\s\d{2,}', valor)[0].strip()
+
+                # --- NOVA ORDEM: O Filtro de Valor age ANTES de qualquer corte ---
                 if "valor" in campo.lower():
+                    # Tenta achar o padrão com R$
                     match_valor = re.search(r'(R\$[\s]*[0-9.,]+)', valor)
                     if match_valor:
                         valor = match_valor.group(1)
+                    else:
+                        # O NOVO CAÇADOR: Se não tem R$, busca números no formato de moeda (ex: 569,94)
+                        match_moeda = re.findall(r'\d{1,3}(?:\.\d{3})*,\d{2}', valor)
+                        if match_moeda:
+                            # Pega sempre o último valor encontrado na linha (a coluna da direita da tabela)
+                            valor = match_moeda[-1]
                 
-                # Filtro Automático 3: Limpeza de MEI e Códigos Bancários
-                elif any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário"]):
-                    valor = re.sub(r'(?<!\S)(?:\d[\s.-]*){6,}(?!\S)', '', valor)
+                else:
+                    # Se NÃO for um campo de valor, passa pelo Cortador de Tabelas
+                    valor = re.split(r' {2,}|\t', valor)[0]
+                        
+                    # Filtro Automático 3: A Limitação do Nome
+                    if any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário"]):
+                        valor = re.split(r'(?<!\S)(?:\d[\s./-]*){6,}', valor)[0]
+                        valor = re.sub(r'[-/|]+$', '', valor.strip()).strip()
+                
+                # Filtro Automático 1: Remove horas grudadas na Data
+                valor = re.sub(r'(\d{2}/\d{2}/\d{4})[\s-]+(?:\d{2}:\d{2}(?::\d{2})?)', r'\1', valor)
                 
                 valor = re.sub(r'\s+', ' ', valor).strip()
                 
-                # Tratamento de segurança para nomes que ficariam em branco
                 if not valor:
                     return f"[{campo} vazio]"
                     
@@ -322,7 +358,13 @@ class RenomeadorPDFApp:
                                 valores_extraidos.append(f"[{item['valor']} n/e]")
                                 
                 if valores_extraidos:
+                    # 1. Junta todos os pedaços extraídos
                     novo_nome_base = " - ".join(valores_extraidos)
+                    
+                    # 2. A BLINDAGEM FINAL: Limpa a string inteira contra qualquer caractere proibido do Windows
+                    novo_nome_base = self.limpar_nome_arquivo(novo_nome_base)
+                    
+                    # 3. Adiciona a extensão
                     novo_nome = f"{novo_nome_base}.pdf"
                     caminho_novo = os.path.join(self.pasta_selecionada, novo_nome)
                     

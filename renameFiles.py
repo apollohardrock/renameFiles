@@ -22,7 +22,7 @@ class RenomeadorPDFApp:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
         # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
-        self.versao_atual = "1.4"
+        self.versao_atual = "1.5"
         self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiles/main/versao.txt"
         self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/renameFiles.exe"
 
@@ -224,27 +224,37 @@ class RenomeadorPDFApp:
         return re.sub(r'[*?:"<>|]', "", nome_seguro).strip()
 
     def extrair_valor_dinamico(self, texto, campo, aparicao):
+        import re
         try:
             # 1. Higienização de Tabela Sicoob (Quebras de linha vazias)
             texto_limpo = re.sub(r'\n[ \t]+', ' ', texto)
             
-            # NOVO: Correção de Desalinhamento (A Ilusão de Ótica do Sicoob)
-            # Puxa o texto que subiu para a linha do Destinatário de volta para a linha do Nome
+            # Correção de Desalinhamento (A Ilusão de Ótica do Sicoob)
             texto_limpo = re.sub(
-                r'Destinatário:\s*([^\n]+)\n[\s]*Nome:([^\n]*)', 
-                r'Destinatário:\nNome: \1 \2', 
-                texto_limpo, 
+                r'Destinatário:\s*([^\n]+)\n[\s]*Nome:([^\n]*)',
+                r'Destinatário:\nNome: \1 \2',
+                texto_limpo,
                 flags=re.IGNORECASE
             )
             
-            # 2. Motor de Busca Flexível
-            padrao = re.compile(rf"{re.escape(campo)}[\s\n:]*([^\n\r]+)", re.IGNORECASE)
+            # 2. Motor de Busca Inteligente (Mesma linha vs Linha de baixo)
+            # O Regex agora captura o que restou na mesma linha (Grupo 1) e a linha de baixo (Grupo 2)
+            padrao = re.compile(rf"{re.escape(campo)}[ \t:]*([^\n\r]*)(?:\n\s*([^\n\r]+))?", re.IGNORECASE)
             
             resultados = list(padrao.finditer(texto_limpo))
-            
             if resultados and len(resultados) >= aparicao:
-                valor = resultados[aparicao - 1].group(1).strip()
+                match = resultados[aparicao - 1]
+                texto_mesma_linha = match.group(1).strip() if match.group(1) else ""
+                texto_linha_baixo = match.group(2).strip() if match.group(2) else ""
                 
+                # Inteligência de Decisão: se a mesma linha tiver texto útil, usa ela. Senão, pula para a de baixo.
+                if len(texto_mesma_linha) > 1:
+                    valor = texto_mesma_linha
+                elif texto_linha_baixo:
+                    valor = texto_linha_baixo
+                else:
+                    valor = ""
+                    
                 # Filtro Automático 1: Remove horas grudadas na Data
                 valor = re.sub(r'(\d{2}/\d{2}/\d{4})[\s-]+(?:\d{2}:\d{2}(?::\d{2})?)', r'\1', valor)
                 
@@ -256,16 +266,21 @@ class RenomeadorPDFApp:
                 
                 # Filtro Automático 3: Limpeza de MEI e Códigos Bancários
                 elif any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário"]):
-                    # AQUI ESTÁ A MÁGICA NOVA: Regex atualizada para pegar números com espaços
                     valor = re.sub(r'(?<!\S)(?:\d[\s.-]*){6,}(?!\S)', '', valor)
-                    valor = re.sub(r'\s+', ' ', valor).strip()
-                        
+                
+                valor = re.sub(r'\s+', ' ', valor).strip()
+                
+                # Tratamento de segurança para nomes que ficariam em branco
+                if not valor:
+                    return f"[{campo} vazio]"
+                    
                 return valor
             else:
                 return f"[{campo} n/e]"
+                
         except Exception:
             return f"[Erro na busca de {campo}]"
-        
+
     def processar_arquivos(self):
         if not self.pasta_selecionada:
             messagebox.showwarning("Aviso", "Por favor, selecione a pasta com os PDFs primeiro!")

@@ -22,7 +22,7 @@ class RenomeadorPDFApp:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
         # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
-        self.versao_atual = "1.5"
+        self.versao_atual = "1.6"
         self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiles/main/versao.txt"
         self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/renameFiles.exe"
 
@@ -250,29 +250,39 @@ class RenomeadorPDFApp:
                 flags=re.IGNORECASE
             )
             
-            # 2. Motor de Busca Inteligente
-            padrao = re.compile(rf"{re.escape(campo)}[ \t:]*([^\n\r]*)(?:\n\s*([^\n\r]+))?", re.IGNORECASE)
+            # 2. Motor de Busca Inteligente (Agora captura até 2 linhas abaixo)
+            padrao = re.compile(rf"{re.escape(campo)}[ \t:]*([^\n\r]*)(?:\n\s*([^\n\r]+))?(?:\n\s*([^\n\r]+))?", re.IGNORECASE)
             
             resultados = list(padrao.finditer(texto_limpo))
             if resultados and len(resultados) >= aparicao:
                 match = resultados[aparicao - 1]
                 texto_mesma_linha = match.group(1).strip() if match.group(1) else ""
                 texto_linha_baixo = match.group(2).strip() if match.group(2) else ""
+                texto_segunda_linha = match.group(3).strip() if match.group(3) else ""
                 
                 # --- INTELIGÊNCIA DE DECISÃO (Detector de Cabeçalhos) ---
-                texto_mesma_linha_limpo = texto_mesma_linha.lower()
-                is_cabecalho_tabela = any(termo in texto_mesma_linha_limpo for termo in [
-                    "cpf/cnpj", "cpf", "cnpj", "agência", "agencia", "código", "codigo", "vencimento", "data", "espécie"
-                ])
-                
-                if is_cabecalho_tabela and texto_linha_baixo:
-                    valor = texto_linha_baixo
-                elif len(texto_mesma_linha) > 1 and not is_cabecalho_tabela:
+                def is_cabecalho(txt):
+                    txt_lower = txt.lower()
+                    # Termos clássicos que vazam em tabelas (Safra, etc.)
+                    termos = ["cpf / cnpj", "cpf/cnpj", "agência / código", "código favorecido", "desconto", "abatimento", "multa", "juros"]
+                    tem_header = any(termo in txt_lower for termo in termos)
+                    
+                    # Garante que não estamos ignorando uma linha que tenha um CNPJ/Conta real inserido
+                    tem_numero_longo = bool(re.search(r'\d{4,}', txt))
+                    
+                    # É cabeçalho falso APENAS se tiver os termos e NÃO tiver números válidos
+                    return tem_header and not tem_numero_longo
+
+                # O robô testa as linhas de cima para baixo. Se for cabeçalho falso, ele pula!
+                if texto_mesma_linha and not is_cabecalho(texto_mesma_linha):
                     valor = texto_mesma_linha
-                elif texto_linha_baixo:
+                elif texto_linha_baixo and not is_cabecalho(texto_linha_baixo):
                     valor = texto_linha_baixo
+                elif texto_segunda_linha and not is_cabecalho(texto_segunda_linha):
+                    valor = texto_segunda_linha
                 else:
-                    valor = ""
+                    # Fallback de segurança caso tudo falhe
+                    valor = texto_mesma_linha or texto_linha_baixo or ""
 
                 # Blindagem Safra (Cabeçalhos Colados Antigos)
                 if "Código Favorecido" in valor or "CPF/CNPJ" in valor:
@@ -298,7 +308,7 @@ class RenomeadorPDFApp:
                     valor = re.split(r' {2,}|\t', valor)[0]
                         
                     # Filtro Automático 3: A Limitação do Nome
-                    if any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário"]):
+                    if any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário", "beneficiario"]):
                         valor = re.split(r'(?<!\S)(?:\d[\s./-]*){6,}', valor)[0]
                         valor = re.sub(r'[-/|]+$', '', valor.strip()).strip()
                 

@@ -5,15 +5,12 @@ import pdfplumber
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk, simpledialog
-import urllib.request
-import subprocess
-import time
 
 class RenomeadorPDFApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Renomeador Inteligente de PDFs")
-        self.root.geometry("750x750") # Aumentei a altura para caber a nova seção
+        self.root.geometry("750x750") 
         
         # Identifica a pasta de execução corretamente
         if getattr(sys, 'frozen', False):
@@ -21,11 +18,8 @@ class RenomeadorPDFApp:
         else:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
-        # 1. DECLARE AS VARIÁVEIS DE VERSÃO AQUI PRIMEIRO
-        self.versao_atual = "1.6"
-        self.url_versao = "https://raw.githubusercontent.com/apollohardrock/renameFiles/main/versao.txt"
-        self.url_exe = "https://github.com/apollohardrock/renameFiles/releases/latest/download/renameFiles.exe"
-
+        # Versão atual do aplicativo
+        self.versao_atual = "1.7"
 
         self.pasta_selecionada = ""
         self.padrao_nomeclatura = [] 
@@ -48,7 +42,7 @@ class RenomeadorPDFApp:
         self.lbl_pasta = tk.Label(frame_pasta, text="Nenhuma pasta selecionada", fg="red")
         self.lbl_pasta.pack(side="left", padx=10)
         
-        # --- Seção 2: Modelos Salvos (NOVIDADE) ---
+        # --- Seção 2: Modelos Salvos ---
         frame_templates = tk.LabelFrame(self.root, text="2. Modelos Salvos", padx=10, pady=10)
         frame_templates.pack(fill="x", padx=10, pady=5)
         
@@ -116,11 +110,6 @@ class RenomeadorPDFApp:
         # Mostra a versão atual no canto esquerdo
         lbl_versao = tk.Label(frame_rodape, text=f"Versão Atual: {self.versao_atual}", fg="gray", font=("Arial", 9, "italic"))
         lbl_versao.pack(side="left")
-        
-        # Botão de atualização no canto direito
-        btn_atualizar = tk.Button(frame_rodape, text="🔄 Verificar Atualizações", command=self.verificar_atualizacao, bg="#2196F3", fg="white")
-        btn_atualizar.pack(side="right")
-
 
     def carregar_templates_do_arquivo(self):
         if os.path.exists(self.arquivo_templates):
@@ -220,7 +209,6 @@ class RenomeadorPDFApp:
         self.root.update_idletasks()
         
     def limpar_nome_arquivo(self, nome):
-        import re
         nome_limpo = str(nome)
         # 1. Substitui barras (normais e invertidas) por hifens ANTES de tudo
         nome_limpo = re.sub(r'[/\\]', '-', nome_limpo)
@@ -237,7 +225,6 @@ class RenomeadorPDFApp:
         return nome_limpo
     
     def extrair_valor_dinamico(self, texto, campo, aparicao):
-        import re
         try:
             # 1. Higienização de Tabela Sicoob
             texto_limpo = re.sub(r'\n[ \t]+', ' ', texto)
@@ -263,17 +250,11 @@ class RenomeadorPDFApp:
                 # --- INTELIGÊNCIA DE DECISÃO (Detector de Cabeçalhos) ---
                 def is_cabecalho(txt):
                     txt_lower = txt.lower()
-                    # Termos clássicos que vazam em tabelas (Safra, etc.)
                     termos = ["cpf / cnpj", "cpf/cnpj", "agência / código", "código favorecido", "desconto", "abatimento", "multa", "juros"]
                     tem_header = any(termo in txt_lower for termo in termos)
-                    
-                    # Garante que não estamos ignorando uma linha que tenha um CNPJ/Conta real inserido
                     tem_numero_longo = bool(re.search(r'\d{4,}', txt))
-                    
-                    # É cabeçalho falso APENAS se tiver os termos e NÃO tiver números válidos
                     return tem_header and not tem_numero_longo
 
-                # O robô testa as linhas de cima para baixo. Se for cabeçalho falso, ele pula!
                 if texto_mesma_linha and not is_cabecalho(texto_mesma_linha):
                     valor = texto_mesma_linha
                 elif texto_linha_baixo and not is_cabecalho(texto_linha_baixo):
@@ -281,7 +262,6 @@ class RenomeadorPDFApp:
                 elif texto_segunda_linha and not is_cabecalho(texto_segunda_linha):
                     valor = texto_segunda_linha
                 else:
-                    # Fallback de segurança caso tudo falhe
                     valor = texto_mesma_linha or texto_linha_baixo or ""
 
                 # Blindagem Safra (Cabeçalhos Colados Antigos)
@@ -292,22 +272,17 @@ class RenomeadorPDFApp:
 
                 # --- NOVA ORDEM: O Filtro de Valor age ANTES de qualquer corte ---
                 if "valor" in campo.lower():
-                    # Tenta achar o padrão com R$
                     match_valor = re.search(r'(R\$[\s]*[0-9.,]+)', valor)
                     if match_valor:
                         valor = match_valor.group(1)
                     else:
-                        # O NOVO CAÇADOR: Se não tem R$, busca números no formato de moeda (ex: 569,94)
                         match_moeda = re.findall(r'\d{1,3}(?:\.\d{3})*,\d{2}', valor)
                         if match_moeda:
-                            # Pega sempre o último valor encontrado na linha (a coluna da direita da tabela)
                             valor = match_moeda[-1]
                 
                 else:
-                    # Se NÃO for um campo de valor, passa pelo Cortador de Tabelas
                     valor = re.split(r' {2,}|\t', valor)[0]
                         
-                    # Filtro Automático 3: A Limitação do Nome
                     if any(palavra in campo.lower() for palavra in ["nome", "razão", "razao", "favorecido", "destinatário", "beneficiário", "beneficiario"]):
                         valor = re.split(r'(?<!\S)(?:\d[\s./-]*){6,}', valor)[0]
                         valor = re.sub(r'[-/|]+$', '', valor.strip()).strip()
@@ -368,13 +343,9 @@ class RenomeadorPDFApp:
                                 valores_extraidos.append(f"[{item['valor']} n/e]")
                                 
                 if valores_extraidos:
-                    # 1. Junta todos os pedaços extraídos
                     novo_nome_base = " - ".join(valores_extraidos)
-                    
-                    # 2. A BLINDAGEM FINAL: Limpa a string inteira contra qualquer caractere proibido do Windows
                     novo_nome_base = self.limpar_nome_arquivo(novo_nome_base)
                     
-                    # 3. Adiciona a extensão
                     novo_nome = f"{novo_nome_base}.pdf"
                     caminho_novo = os.path.join(self.pasta_selecionada, novo_nome)
                     
@@ -394,78 +365,6 @@ class RenomeadorPDFApp:
         self.log("\nProcessamento finalizado!")
         self.btn_executar.config(state='normal', text="RENOMEAR ARQUIVOS")
 
-    def verificar_atualizacao(self):
-        self.log("Verificando se há atualizações...")
-        self.root.update()
-        
-        try:
-            # O truque do cache: adiciona os milissegundos atuais no final do link
-            import time
-            url_sem_cache = f"{self.url_versao}?t={int(time.time())}"
-            
-            resposta = urllib.request.urlopen(url_sem_cache, timeout=5)
-            versao_online = resposta.read().decode('utf-8').strip()
-
-            if versao_online > self.versao_atual:
-                if messagebox.askyesno("Atualização Disponível", f"Uma nova versão ({versao_online}) foi encontrada!\nSua versão atual: {self.versao_atual}\n\nDeseja atualizar agora?"):
-                    self.aplicar_atualizacao()
-            else:
-                messagebox.showinfo("Atualizado", "O sistema já está na versão mais recente!")
-                self.log(f"Versão local: {self.versao_atual} | Versão online lida: {versao_online}")
-                
-        except Exception as e:
-            messagebox.showerror("Erro de Conexão", f"Não foi possível verificar atualizações.\nVerifique sua internet ou servidor.\n\nDetalhe: {e}")
-            self.log("Falha ao verificar atualizações.")
-
-    def aplicar_atualizacao(self):
-        self.btn_executar.config(state='disabled')
-        self.log("Baixando nova versão... O aplicativo será reiniciado em instantes.")
-        self.root.update()
-
-        exe_antigo = sys.executable 
-        exe_novo = exe_antigo + "_temp.exe"
-
-        try:
-            # Baixa o novo arquivo
-            urllib.request.urlretrieve(self.url_exe, exe_novo)
-
-            # Trava de Segurança
-            tamanho_baixado = os.path.getsize(exe_novo)
-            if tamanho_baixado < 10 * 1024 * 1024:  # 10 MB em bytes
-                self.log("❌ Erro: O arquivo baixado é muito pequeno.")
-                os.remove(exe_novo)
-                self.btn_executar.config(state='normal')
-                return
-
-            bat_path = os.path.join(os.path.dirname(exe_antigo), "atualizador.bat")
-            nome_original = os.path.basename(exe_antigo)
-            
-            # --- O SCRIPT BAT BLINDADO ---
-            # Ele cria um loop (:tentar_deletar). Fica tentando apagar o arquivo a cada 1 segundo.
-            # Só avança para o "ren" quando o exe_antigo não existir mais.
-            comandos_bat = f"""@echo off
-:tentar_deletar
-timeout /t 1 /nobreak > NUL
-del "{exe_antigo}" > NUL 2>&1
-if exist "{exe_antigo}" goto tentar_deletar
-
-ren "{exe_novo}" "{nome_original}"
-start "" "{exe_antigo}"
-del "%~f0"
-"""
-            with open(bat_path, 'w', encoding='utf-8') as f:
-                f.write(comandos_bat)
-
-            # Inicia o BAT desvinculado do processo atual
-            subprocess.Popen(bat_path, shell=True)
-            
-            # Força o fechamento imediato do aplicativo
-            self.root.destroy()
-            sys.exit()
-
-        except Exception as e:
-            self.log(f"Erro crítico durante a atualização: {e}")
-            self.btn_executar.config(state='normal')
 
 if __name__ == "__main__":
     root = tk.Tk()

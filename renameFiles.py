@@ -19,7 +19,7 @@ class RenomeadorPDFApp:
             self.pasta_padrao = os.path.dirname(os.path.abspath(__file__))
 
         # Versão atual do aplicativo
-        self.versao_atual = "1.7"
+        self.versao_atual = "1.8"
 
         self.pasta_selecionada = ""
         self.padrao_nomeclatura = [] 
@@ -276,7 +276,7 @@ class RenomeadorPDFApp:
                     if match_valor:
                         valor = match_valor.group(1)
                     else:
-                        match_moeda = re.findall(r'\d{1,3}(?:\.\d{3})*,\d{2}', valor)
+                        match_moeda = re.findall(r'\d+(?:\.\d{3})*,\d{2}', valor)
                         if match_moeda:
                             valor = match_moeda[-1]
                 
